@@ -13,7 +13,7 @@ on:
       DEVICE_TREE:
         description: 'Custom Recovery Tree'
         required: true
-        default: 'https://github.com/FusinX/android_device_lenovo_brady-twrp'
+        default: 'https://github.com/FusinX/android_device_lenovo_brady-twrp.git'
       DEVICE_TREE_BRANCH:
         description: 'Custom Recovery Tree Branch'
         required: true
@@ -27,6 +27,15 @@ on:
         - boot
         - recovery
         - vendorboot
+      LDCHECK:
+        description: 'Use LDCHECK'
+        required: false
+        default: 'false'
+        type: boolean
+      LDCHECKPATH:
+        description: 'Path of blobs to check'
+        required: true
+        default: 'system/bin/qseecomd'
 
 jobs:
   build:
@@ -45,7 +54,7 @@ jobs:
         sudo apt update
         sudo apt -y install gperf gcc-multilib g++-multilib libncurses5-dev zlib1g-dev \
           lib32z1-dev libssl-dev libxml2-utils bc ccache \
-          python2 python-is-python2 unzip zip flex bison curl 
+          python2 python-is-python2 python3 python3-pip unzip zip flex bison curl 
     
     - name: Install OpenJDK 8
       uses: actions/setup-java@v4
@@ -78,6 +87,16 @@ jobs:
         cd android-recovery
         git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./device/lenovo/brady
     
+    - name: Set Build Target
+      run: |
+        if [ ${{ inputs.BUILD_TARGET }} == 'recovery' ]; then
+           echo "BUILD_TARGET_NAME=recovery" >> $GITHUB_ENV
+        elif [ ${{ inputs.BUILD_TARGET }} == 'boot' ]; then
+           echo "BUILD_TARGET_NAME=boot" >> $GITHUB_ENV
+        else
+           echo "BUILD_TARGET_NAME=vendor_boot" >> $GITHUB_ENV
+        fi
+    
     - name: Build TWRP Recovery
       run: |
         cd android-recovery
@@ -85,10 +104,22 @@ jobs:
         export ALLOW_MISSING_DEPENDENCIES=true
         lunch omni_brady-eng
         make clean
-        make ${{ inputs.BUILD_TARGET }}image -j$(nproc --all)
+        make ${{ env.BUILD_TARGET_NAME }} -j$(nproc --all)
+    
+    - name: Run LDCheck
+      if: inputs.LDCHECK == 'true'
+      run: |
+        if [ -d "android-recovery/out/target/product/brady/recovery/root" ]; then
+            cd android-recovery/out/target/product/brady/recovery/root
+            python3 ldcheck -p system/lib64:vendor/lib64:system/lib:vendor/lib -d ${{ inputs.LDCHECKPATH }}
+            echo "LDCheck complete."
+        else
+            echo "Recovery root directory not found, skipping LDCheck."
+        fi
+      continue-on-error: true
     
     - name: Upload Recovery Image
       uses: actions/upload-artifact@v3
       with:
         name: TWRP-${{ inputs.BUILD_TARGET }}-Lenovo-Brady
-        path: android-recovery/out/target/product/brady/${{ inputs.BUILD_TARGET }}.img
+        path: android-recovery/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img
