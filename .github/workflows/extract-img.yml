@@ -1,4 +1,4 @@
-name: Extract and Organize IMG Files from URL
+name: extract-img
 
 on:
   workflow_dispatch:
