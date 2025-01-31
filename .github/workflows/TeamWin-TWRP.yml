@@ -102,7 +102,7 @@ jobs:
         cd android-recovery
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch omni_brady-eng
+        lunch twrp_brady-eng
         make clean
         make ${{ env.BUILD_TARGET_NAME }} -j$(nproc --all)
     
