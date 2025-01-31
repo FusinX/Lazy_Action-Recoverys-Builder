@@ -1,0 +1,95 @@
+name: Extract and Organize IMG Files
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  extract-images:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Required Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip tar p7zip-full android-sdk-libsparse-utils e2fsprogs mount
+
+      - name: Extract Archive Files
+        run: |
+          set -e
+          mkdir -p extracted_files
+          
+          for archive in $(find . -type f \( -name "*.zip" -o -name "*.tar" -o -name "*.tar.gz" \)); do
+            echo "Extracting archive: $archive"
+            case "$archive" in
+              *.zip) unzip -o "$archive" -d extracted_files/ || echo "Failed to extract $archive" ;;
+              *.tar.gz) tar -xvzf "$archive" -C extracted_files/ || echo "Failed to extract $archive" ;;
+              *.tar) tar -xvf "$archive" -C extracted_files/ || echo "Failed to extract $archive" ;;
+            esac
+          done
+
+      - name: Organize and Extract IMG Files
+        run: |
+          set -e
+          mkdir -p organized_files
+          cd extracted_files || exit 1
+
+          for img in *.img; do
+            if [ -f "$img" ]; then
+              folder_name="${img%.*}"
+              mkdir -p "../organized_files/$folder_name"
+              mv "$img" "../organized_files/$folder_name/"
+              
+              cd "../organized_files/$folder_name"
+
+              echo "Processing: $img"
+              
+              fs_type=$(file "$img")
+              echo "File Type: $fs_type"
+
+              echo "Trying 7z extraction..."
+              7z x "$img" -oextracted || echo "7z extraction failed for $img"
+
+              if echo "$fs_type" | grep -q "Android sparse image"; then
+                echo "Converting sparse image: $img"
+                if simg2img "$img" raw.img; then
+                  mv raw.img "$img"
+                else
+                  echo "simg2img failed for $img"
+                fi
+              fi
+
+              if echo "$fs_type" | grep -q "ext4"; then
+                echo "Extracting ext4 image: $img"
+                mkdir -p extracted
+                if sudo mount -o loop "$img" extracted; then
+                  echo "Mounted successfully, copying files..."
+                  cp -r extracted/* extracted/ || echo "Copy failed"
+                  sudo umount extracted
+                else
+                  echo "Mount failed, trying debugfs..."
+                  debugfs "$img" -R "dump -p / extracted/" || echo "debugfs failed for $img"
+                fi
+              fi
+
+              cd ../../extracted_files || exit 1
+            fi
+          done
+
+      - name: Clone Target Repository
+        run: |
+          git clone https://github.com/FusinX/android_device_lenovo_brady-DUMPS.git dumps_repo
+          echo "Cloned target repository."
+
+      - name: Copy Extracted Files to Target Repository
+        run: |
+          cp -r organized_files/* dumps_repo/
+          cd dumps_repo
+          git add .
+          git commit -m "Added extracted IMG files"
+          git push https://github.com/FusinX/android_device_lenovo_brady-DUMPS.git HEAD:main || echo "No changes to commit."
