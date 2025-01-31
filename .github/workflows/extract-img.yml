@@ -21,7 +21,7 @@ jobs:
       - name: Install Required Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip tar p7zip-full android-sdk-libsparse-utils e2fsprogs mount
+          sudo apt-get install -y wget unzip tar p7zip-full android-sdk-libsparse-utils e2fsprogs mount debugfs
 
       - name: Download and Extract ZIP File
         run: |
@@ -41,12 +41,11 @@ jobs:
             if [ -f "$img" ]; then
               folder_name="${img%.*}"
               mkdir -p "../organized_files/$folder_name"
-              mv "$img" "../organized_files/$folder_name/"
+              cp "$img" "../organized_files/$folder_name/"
               
               cd "../organized_files/$folder_name"
 
               echo "Processing: $img"
-              
               fs_type=$(file "$img")
               echo "File Type: $fs_type"
 
@@ -89,7 +88,17 @@ jobs:
         run: |
           repo_name=$(basename "${{ github.event.inputs.repo_url }}" .git)
           cp -r organized_files/* "$repo_name/"
+
+      - name: Commit and Push Changes
+        run: |
+          repo_name=$(basename "${{ github.event.inputs.repo_url }}" .git)
           cd "$repo_name"
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
           git add .
-          git commit -m "Added extracted IMG files"
-          git push "${{ github.event.inputs.repo_url }}" HEAD:main || echo "No changes to commit."
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Added extracted IMG files"
+            git push origin main
+          fi
