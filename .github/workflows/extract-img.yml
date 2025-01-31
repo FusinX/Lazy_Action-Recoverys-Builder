@@ -1,10 +1,14 @@
-name: Extract and Organize IMG Files
+name: Extract and Organize IMG Files from URL
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      zip_url:
+        description: "Paste the direct link to the ZIP file containing IMG files"
+        required: true
+      repo_url:
+        description: "Paste the GitHub repository link where files should be uploaded"
+        required: true
 
 jobs:
   extract-images:
@@ -17,21 +21,15 @@ jobs:
       - name: Install Required Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y unzip tar p7zip-full android-sdk-libsparse-utils e2fsprogs mount
+          sudo apt-get install -y wget unzip tar p7zip-full android-sdk-libsparse-utils e2fsprogs mount
 
-      - name: Extract Archive Files
+      - name: Download and Extract ZIP File
         run: |
           set -e
           mkdir -p extracted_files
-          
-          for archive in $(find . -type f \( -name "*.zip" -o -name "*.tar" -o -name "*.tar.gz" \)); do
-            echo "Extracting archive: $archive"
-            case "$archive" in
-              *.zip) unzip -o "$archive" -d extracted_files/ || echo "Failed to extract $archive" ;;
-              *.tar.gz) tar -xvzf "$archive" -C extracted_files/ || echo "Failed to extract $archive" ;;
-              *.tar) tar -xvf "$archive" -C extracted_files/ || echo "Failed to extract $archive" ;;
-            esac
-          done
+          echo "Downloading ZIP file from: ${{ github.event.inputs.zip_url }}"
+          wget -O archive.zip "${{ github.event.inputs.zip_url }}" || { echo "Failed to download ZIP file"; exit 1; }
+          unzip -o archive.zip -d extracted_files/
 
       - name: Organize and Extract IMG Files
         run: |
@@ -83,13 +81,15 @@ jobs:
 
       - name: Clone Target Repository
         run: |
-          git clone https://github.com/FusinX/android_device_lenovo_brady-DUMPS.git dumps_repo
-          echo "Cloned target repository."
+          repo_name=$(basename "${{ github.event.inputs.repo_url }}" .git)
+          git clone "${{ github.event.inputs.repo_url }}" "$repo_name"
+          echo "Cloned target repository: ${{ github.event.inputs.repo_url }}"
 
       - name: Copy Extracted Files to Target Repository
         run: |
-          cp -r organized_files/* dumps_repo/
-          cd dumps_repo
+          repo_name=$(basename "${{ github.event.inputs.repo_url }}" .git)
+          cp -r organized_files/* "$repo_name/"
+          cd "$repo_name"
           git add .
           git commit -m "Added extracted IMG files"
-          git push https://github.com/FusinX/android_device_lenovo_brady-DUMPS.git HEAD:main || echo "No changes to commit."
+          git push "${{ github.event.inputs.repo_url }}" HEAD:main || echo "No changes to commit."
