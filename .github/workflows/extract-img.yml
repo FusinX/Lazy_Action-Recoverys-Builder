@@ -21,7 +21,11 @@ jobs:
       - name: Install Required Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget unzip tar p7zip-full android-sdk-libsparse-utils e2fsprogs mount debugfs
+          sudo apt-get install -y wget unzip tar p7zip-full android-sdk-libsparse-utils e2fsprogs mount
+
+      - name: Verify Installed Tools
+        run: |
+          debugfs --version || echo "debugfs is not available"
 
       - name: Download and Extract ZIP File
         run: |
@@ -70,7 +74,11 @@ jobs:
                   sudo umount extracted
                 else
                   echo "Mount failed, trying debugfs..."
-                  debugfs "$img" -R "dump -p / extracted/" || echo "debugfs failed for $img"
+                  if command -v debugfs &> /dev/null; then
+                    debugfs "$img" -R "dump -p / extracted/" || echo "debugfs failed for $img"
+                  else
+                    echo "debugfs not found, skipping debugfs extraction."
+                  fi
                 fi
               fi
 
