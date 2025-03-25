@@ -62,8 +62,22 @@ jobs:
     
     - name: Clone Device Tree
       run: |
-        cd android-recovery/device
-        git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} realme/samurai
+        mkdir -p android-recovery/device/realme
+        cd android-recovery/device/realme
+        git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} samurai
+    
+    - name: Fix AndroidProducts.mk if missing
+      run: |
+        FILE=android-recovery/device/realme/samurai/AndroidProducts.mk
+        if [ ! -f "$FILE" ]; then
+          echo "Creating AndroidProducts.mk"
+          echo "PRODUCT_MAKEFILES := \" > $FILE
+          echo "    \$(LOCAL_DIR)/twrp_samurai.mk" >> $FILE
+          echo "COMMON_LUNCH_CHOICES := \" >> $FILE
+          echo "    twrp_samurai-eng \" >> $FILE
+          echo "    twrp_samurai-user \" >> $FILE
+          echo "    twrp_samurai-userdebug" >> $FILE
+        fi
     
     - name: Enable ccache
       run: |
@@ -75,19 +89,23 @@ jobs:
         cd android-recovery
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch twrp_samurai-eng
-        mka recoveryimage
+        if grep -q 'twrp_samurai-eng' device/realme/samurai/AndroidProducts.mk; then
+          lunch twrp_samurai-eng
+        else
+          echo "Error: twrp_samurai-eng is not defined in AndroidProducts.mk!" && exit 1
+        fi
+        mka ${{ inputs.BUILD_TARGET }}
     
     - name: Check if Recovery Image Exists
       run: |
-        RECOVERY_PATH="android-recovery/out/target/product/$(ls android-recovery/out/target/product)/recovery.img"
+        RECOVERY_PATH="android-recovery/out/target/product/samurai/${{ inputs.BUILD_TARGET }}.img"
         if [ ! -f "$RECOVERY_PATH" ]; then
-          echo "Error: Recovery image not found!" && exit 1
+          echo "Error: ${{ inputs.BUILD_TARGET }}.img not found!" && exit 1
         fi
         echo "RECOVERY_PATH=$RECOVERY_PATH" >> $GITHUB_ENV
     
     - name: Upload Recovery Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: recovery.img
+        name: ${{ inputs.BUILD_TARGET }}.img
         path: ${{ env.RECOVERY_PATH }}
