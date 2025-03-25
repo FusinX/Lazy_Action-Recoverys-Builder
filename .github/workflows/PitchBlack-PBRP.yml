@@ -72,10 +72,29 @@ jobs:
         if [ ! -f "$FILE" ]; then
           echo "Creating AndroidProducts.mk"
           cat <<EOF > $FILE
-        PRODUCT_MAKEFILES := \n            \$(LOCAL_DIR)/twrp_samurai.mk
-        
-        COMMON_LUNCH_CHOICES := \n            twrp_samurai-eng \n            twrp_samurai-user \n            twrp_samurai-userdebug
-        EOF
+PRODUCT_MAKEFILES := \
+    \$(LOCAL_DIR)/twrp_samurai.mk
+
+COMMON_LUNCH_CHOICES := \
+    twrp_samurai-eng \
+    twrp_samurai-user \
+    twrp_samurai-userdebug
+EOF
+        fi
+    
+    - name: Ensure twrp_samurai.mk exists
+      run: |
+        FILE=android-recovery/device/realme/samurai/twrp_samurai.mk
+        if [ ! -f "$FILE" ]; then
+          echo "Creating minimal twrp_samurai.mk"
+          cat <<EOF > $FILE
+$(call inherit-product, vendor/omni/config/common.mk)
+PRODUCT_DEVICE := samurai
+PRODUCT_NAME := twrp_samurai
+PRODUCT_BRAND := realme
+PRODUCT_MODEL := Realme X2 Pro
+PRODUCT_MANUFACTURER := realme
+EOF
         fi
     
     - name: Enable ccache
