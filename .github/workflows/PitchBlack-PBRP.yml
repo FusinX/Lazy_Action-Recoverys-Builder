@@ -65,8 +65,16 @@ jobs:
         lunch twrp_samurai-eng
         mka recoveryimage
     
+    - name: Check if Recovery Image Exists
+      run: |
+        RECOVERY_PATH="android-recovery/out/target/product/$(ls android-recovery/out/target/product)/recovery.img"
+        if [ ! -f "$RECOVERY_PATH" ]; then
+          echo "Error: Recovery image not found!" && exit 1
+        fi
+        echo "RECOVERY_PATH=$RECOVERY_PATH" >> $GITHUB_ENV
+    
     - name: Upload Recovery Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: recovery.img
-        path: android-recovery/out/target/product/$(ls android-recovery/out/target/product)/recovery.img
+        path: ${{ env.RECOVERY_PATH }}
