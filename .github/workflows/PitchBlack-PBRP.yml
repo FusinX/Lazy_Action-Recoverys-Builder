@@ -71,15 +71,13 @@ jobs:
         FILE=android-recovery/device/realme/samurai/AndroidProducts.mk
         if [ ! -f "$FILE" ]; then
           echo "Creating AndroidProducts.mk"
-          cat <<EOF > $FILE
-PRODUCT_MAKEFILES := \
-    \$(LOCAL_DIR)/twrp_samurai.mk
-
-COMMON_LUNCH_CHOICES := \
-    twrp_samurai-eng \
-    twrp_samurai-user \
-    twrp_samurai-userdebug
-EOF
+          echo "PRODUCT_MAKEFILES := \" > $FILE
+          echo "    \$(LOCAL_DIR)/twrp_samurai.mk" >> $FILE
+          echo "" >> $FILE
+          echo "COMMON_LUNCH_CHOICES := \" >> $FILE
+          echo "    twrp_samurai-eng \" >> $FILE
+          echo "    twrp_samurai-user \" >> $FILE
+          echo "    twrp_samurai-userdebug" >> $FILE
         fi
     
     - name: Ensure twrp_samurai.mk exists
@@ -87,14 +85,12 @@ EOF
         FILE=android-recovery/device/realme/samurai/twrp_samurai.mk
         if [ ! -f "$FILE" ]; then
           echo "Creating minimal twrp_samurai.mk"
-          cat <<EOF > $FILE
-$(call inherit-product, vendor/omni/config/common.mk)
-PRODUCT_DEVICE := samurai
-PRODUCT_NAME := twrp_samurai
-PRODUCT_BRAND := realme
-PRODUCT_MODEL := Realme X2 Pro
-PRODUCT_MANUFACTURER := realme
-EOF
+          echo "$(call inherit-product, vendor/omni/config/common.mk)" > $FILE
+          echo "PRODUCT_DEVICE := samurai" >> $FILE
+          echo "PRODUCT_NAME := twrp_samurai" >> $FILE
+          echo "PRODUCT_BRAND := realme" >> $FILE
+          echo "PRODUCT_MODEL := Realme X2 Pro" >> $FILE
+          echo "PRODUCT_MANUFACTURER := realme" >> $FILE
         fi
     
     - name: Enable ccache
