@@ -1,55 +1,125 @@
-name: Build TWRP for brady
+name: TeamWin [TWRP]
 
 on:
   workflow_dispatch:
+    inputs:
+      MANIFEST_BRANCH:
+        description: 'TWRP Manifest Branch'
+        required: true
+        default: 'twrp-8.0'
+        type: choice
+        options:
+        - twrp-8.0
+      DEVICE_TREE:
+        description: 'Custom Recovery Tree'
+        required: true
+        default: 'https://github.com/FusinX/android_device_lenovo_brady-twrp.git'
+      DEVICE_TREE_BRANCH:
+        description: 'Custom Recovery Tree Branch'
+        required: true
+        default: 'main'
+      BUILD_TARGET:
+        description: 'Specify your Build Target'
+        required: true
+        default: 'recovery'
+        type: choice
+        options:
+        - boot
+        - recovery
+        - vendorboot
+      LDCHECK:
+        description: 'Use LDCHECK'
+        required: false
+        default: 'true'     # ✅ LDCheck is enabled by default now
+        type: boolean
+      LDCHECKPATH:
+        description: 'Path of blobs to check'
+        required: true
+        default: 'device/lenovo/brady/prebuilt/lib'
 
 jobs:
   build:
-    name: Compile TWRP Recovery
+    name: Build TWRP by ${{ github.actor }}
     runs-on: ubuntu-20.04
-
     env:
-      DEVICE_CODENAME: brady
-      DEVICE_TREE: device/lenovo/brady
-      MANIFEST_URL: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git
-      MANIFEST_BRANCH: twrp-8.0
-      MAKE_TARGET: recoveryimage
-      TZ: Asia/Kolkata
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
 
     steps:
-    - name: ⏬ Checkout this repo (local device tree)
-      uses: actions/checkout@v3
+    - name: Check Out
+      uses: actions/checkout@v4
 
-    - name: 🛠️ Setup build environment
+    - name: Install Dependencies
       run: |
         sudo apt update
-        sudo apt install -y git-core gnupg flex bison gperf build-essential \
-          zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 \
-          lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev \
-          ccache libgl1-mesa-dev libxml2-utils xsltproc unzip bc python2
+        sudo apt install -y gperf gcc-multilib g++-multilib libncurses5-dev zlib1g-dev \
+          lib32z1-dev libssl-dev libxml2-utils bc ccache \
+          python2 python-is-python2 python3 python3-pip unzip zip flex bison curl
 
-    - name: ⏬ Init and sync TWRP source
+    - name: Install OpenJDK 8
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '8'
+
+    - name: Install Git-Repo
       run: |
-        mkdir -p ~/twrp && cd ~/twrp
-        repo init -u ${{ env.MANIFEST_URL }} -b ${{ env.MANIFEST_BRANCH }}
+        mkdir ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod a+x ~/bin/repo
+        sudo ln -sf ~/bin/repo /usr/bin/repo
+
+    - name: Initialize Repo
+      run: |
+        mkdir android-recovery
+        cd android-recovery
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b ${{ inputs.MANIFEST_BRANCH }}
+
+    - name: Sync Source Code
+      run: |
+        cd android-recovery
         repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
-        cp -r $GITHUB_WORKSPACE/${{ env.DEVICE_TREE }} ~/twrp/${{ env.DEVICE_TREE }}
 
-    - name: 🔧 Export build vars
+    - name: Clone Device Tree
       run: |
-        cd ~/twrp
+        cd android-recovery
+        git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./device/lenovo/brady
+
+    - name: Set Build Target
+      run: |
+        if [ "${{ inputs.BUILD_TARGET }}" == "recovery" ]; then
+          echo "BUILD_TARGET_NAME=recoveryimage" >> $GITHUB_ENV
+        elif [ "${{ inputs.BUILD_TARGET }}" == "boot" ]; then
+          echo "BUILD_TARGET_NAME=bootimage" >> $GITHUB_ENV
+        else
+          echo "BUILD_TARGET_NAME=vendorbootimage" >> $GITHUB_ENV
+        fi
+
+    - name: Build TWRP
+      run: |
+        cd android-recovery
         export ALLOW_MISSING_DEPENDENCIES=true
         export LC_ALL=C
+        source build/envsetup.sh
+        lunch omni_brady-eng
+        make clean
+        mka ${{ env.BUILD_TARGET_NAME }}
 
-    - name: 🧱 Build recovery image
+    - name: Run LDCheck
+      if: inputs.LDCHECK == 'true'
       run: |
-        cd ~/twrp
-        . build/envsetup.sh
-        lunch omni_${{ env.DEVICE_CODENAME }}-eng
-        mka -j$(nproc) ${{ env.MAKE_TARGET }}
+        cd android-recovery
+        git clone https://github.com/TeamWin/android_external_ldcheck
+        cd out/target/product/brady/recovery/root
+        python3 ../../../android_external_ldcheck/ldcheck.py -p system/lib64:vendor/lib64:system/lib:vendor/lib -d ${{ inputs.LDCHECKPATH }}
+        echo "✅ LDCheck complete."
+      continue-on-error: true
 
-    - name: 📦 Upload recovery.img
-      uses: actions/upload-artifact@v3
+    - name: Upload Recovery Image
+      uses: actions/upload-artifact@v3.1.2
       with:
-        name: TWRP-${{ env.DEVICE_CODENAME }}
-        path: ~/twrp/out/target/product/${{ env.DEVICE_CODENAME }}/recovery.img
+        name: TWRP-${{ inputs.BUILD_TARGET }}-Lenovo-Brady
+        path: android-recovery/out/target/product/brady/${{ env.BUILD_TARGET_NAME%image }}.img
