@@ -1,0 +1,55 @@
+name: Build TWRP for brady
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compile TWRP Recovery
+    runs-on: ubuntu-20.04
+
+    env:
+      DEVICE_CODENAME: brady
+      DEVICE_TREE: device/lenovo/brady
+      MANIFEST_URL: https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git
+      MANIFEST_BRANCH: twrp-8.0
+      MAKE_TARGET: recoveryimage
+      TZ: Asia/Kolkata
+
+    steps:
+    - name: ⏬ Checkout this repo (local device tree)
+      uses: actions/checkout@v3
+
+    - name: 🛠️ Setup build environment
+      run: |
+        sudo apt update
+        sudo apt install -y git-core gnupg flex bison gperf build-essential \
+          zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 \
+          lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev \
+          ccache libgl1-mesa-dev libxml2-utils xsltproc unzip bc python2
+
+    - name: ⏬ Init and sync TWRP source
+      run: |
+        mkdir -p ~/twrp && cd ~/twrp
+        repo init -u ${{ env.MANIFEST_URL }} -b ${{ env.MANIFEST_BRANCH }}
+        repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+        cp -r $GITHUB_WORKSPACE/${{ env.DEVICE_TREE }} ~/twrp/${{ env.DEVICE_TREE }}
+
+    - name: 🔧 Export build vars
+      run: |
+        cd ~/twrp
+        export ALLOW_MISSING_DEPENDENCIES=true
+        export LC_ALL=C
+
+    - name: 🧱 Build recovery image
+      run: |
+        cd ~/twrp
+        . build/envsetup.sh
+        lunch omni_${{ env.DEVICE_CODENAME }}-eng
+        mka -j$(nproc) ${{ env.MAKE_TARGET }}
+
+    - name: 📦 Upload recovery.img
+      uses: actions/upload-artifact@v3
+      with:
+        name: TWRP-${{ env.DEVICE_CODENAME }}
+        path: ~/twrp/out/target/product/${{ env.DEVICE_CODENAME }}/recovery.img
