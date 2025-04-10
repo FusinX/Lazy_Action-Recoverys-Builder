@@ -9,7 +9,7 @@ on:
         default: 'twrp-8.1'
         type: choice
         options:
-        - twrp-8.0
+        - twrp-8.1
       DEVICE_TREE:
         description: 'Custom Recovery Tree'
         required: true
