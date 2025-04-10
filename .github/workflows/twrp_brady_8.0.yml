@@ -17,7 +17,7 @@ on:
       DEVICE_TREE_BRANCH:
         description: 'Custom Recovery Tree Branch'
         required: true
-        default: 'main'
+        default: 'twrp-8.0'
       BUILD_TARGET:
         description: 'Specify your Build Target'
         required: true
@@ -122,7 +122,7 @@ jobs:
       continue-on-error: true
 
     - name: Upload Recovery Image
-      uses: actions/upload-artifact@v3.1.2
+      uses: actions/upload-artifact@v4
       with:
         name: TWRP-${{ inputs.BUILD_TARGET }}-Lenovo-Brady
         path: android-recovery/out/target/product/brady/${{ env.BUILD_IMAGE_NAME }}.img
