@@ -117,9 +117,14 @@ jobs:
       run: |
         cd android-recovery
         git clone https://github.com/TeamWin/android_external_ldcheck
-        cd out/target/product/brady/recovery/root
-        python3 ../../../android_external_ldcheck/ldcheck.py -p system/lib64:vendor/lib64:system/lib:vendor/lib -d ${{ inputs.LDCHECKPATH }}
-        echo "✅ LDCheck complete."
+        ROOT_DIR=out/target/product/brady/recovery/root
+        if [ -d "$ROOT_DIR" ]; then
+          cd $ROOT_DIR
+          python3 ../../../android_external_ldcheck/ldcheck.py -p system/lib64:vendor/lib64:system/lib:vendor/lib -d ${{ inputs.LDCHECKPATH }}
+          echo "✅ LDCheck complete."
+        else
+          echo "⚠️ Recovery root directory not found, skipping LDCheck."
+        fi
       continue-on-error: true
 
     - name: Upload Recovery Image
