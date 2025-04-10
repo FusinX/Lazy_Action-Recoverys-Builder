@@ -86,7 +86,8 @@ jobs:
     - name: Clone Device Tree
       run: |
         cd android-recovery
-        git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./device/lenovo/brady
+        git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ inputs.DEVICE_TREE#https://github.com/ }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./device/lenovo/brady
+
 
     - name: Set Build Target
       run: |
