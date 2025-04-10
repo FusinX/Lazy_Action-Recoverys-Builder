@@ -17,7 +17,7 @@ on:
       DEVICE_TREE_BRANCH:
         description: 'Custom Recovery Tree Branch'
         required: true
-        default: 'twrp-8.0'
+        default: 'main'
       BUILD_TARGET:
         description: 'Specify your Build Target'
         required: true
@@ -83,11 +83,11 @@ jobs:
         cd android-recovery
         repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
-    - name: Clone Device Tree
+    - name: Clone Device Tree (Authenticated)
       run: |
         cd android-recovery
-        git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ inputs.DEVICE_TREE#https://github.com/ }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./device/lenovo/brady
-
+        REPO_PATH=$(echo "${{ inputs.DEVICE_TREE }}" | sed 's|https://github.com/||')
+        git clone https://${{ secrets.GITHUB_TOKEN }}@github.com/$REPO_PATH -b ${{ inputs.DEVICE_TREE_BRANCH }} ./device/lenovo/brady
 
     - name: Set Build Target
       run: |
