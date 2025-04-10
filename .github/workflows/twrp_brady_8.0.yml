@@ -30,7 +30,7 @@ on:
       LDCHECK:
         description: 'Use LDCHECK'
         required: false
-        default: 'true'     # ✅ LDCheck is enabled by default now
+        default: 'true'
         type: boolean
       LDCHECKPATH:
         description: 'Path of blobs to check'
@@ -92,10 +92,13 @@ jobs:
       run: |
         if [ "${{ inputs.BUILD_TARGET }}" == "recovery" ]; then
           echo "BUILD_TARGET_NAME=recoveryimage" >> $GITHUB_ENV
+          echo "BUILD_IMAGE_NAME=recovery" >> $GITHUB_ENV
         elif [ "${{ inputs.BUILD_TARGET }}" == "boot" ]; then
           echo "BUILD_TARGET_NAME=bootimage" >> $GITHUB_ENV
+          echo "BUILD_IMAGE_NAME=boot" >> $GITHUB_ENV
         else
           echo "BUILD_TARGET_NAME=vendorbootimage" >> $GITHUB_ENV
+          echo "BUILD_IMAGE_NAME=vendorboot" >> $GITHUB_ENV
         fi
 
     - name: Build TWRP
@@ -122,4 +125,4 @@ jobs:
       uses: actions/upload-artifact@v3.1.2
       with:
         name: TWRP-${{ inputs.BUILD_TARGET }}-Lenovo-Brady
-        path: android-recovery/out/target/product/brady/${{ env.BUILD_TARGET_NAME%image }}.img
+        path: android-recovery/out/target/product/brady/${{ env.BUILD_IMAGE_NAME }}.img
