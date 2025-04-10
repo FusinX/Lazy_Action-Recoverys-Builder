@@ -87,8 +87,8 @@ jobs:
       run: |
         cd android-recovery
         REPO_PATH=$(echo "${{ inputs.DEVICE_TREE }}" | sed 's|https://github.com/||')
-        git clone https://${{ secrets.GH_PAT
-          echo "Using GH_PAT for authentication" }}@github.com/$REPO_PATH -b ${{ inputs.DEVICE_TREE_BRANCH }} ./device/lenovo/brady
+        echo "Using GH_PAT for authentication"
+git clone https://${{ secrets.GH_PAT }}@github.com/$REPO_PATH -b ${{ inputs.DEVICE_TREE_BRANCH }} ./device/lenovo/brady
 
     - name: Set Build Target
       run: |
