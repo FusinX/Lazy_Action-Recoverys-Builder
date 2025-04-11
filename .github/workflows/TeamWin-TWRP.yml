@@ -37,35 +37,46 @@ on:
         required: true
         default: 'system/bin/qseecomd'
       RELEASE_TAG:
-        description: 'Custom GitHub Release Tag'
+        description: 'Release Tag'
         required: true
-        default: 'twrp-brady-custom'
+        default: 'twrp-8.1-brady'
       RELEASE_NAME:
-        description: 'Custom GitHub Release Name'
+        description: 'Release Name'
         required: true
-        default: 'TWRP for Lenovo Brady'
+        default: 'TWRP 8.1 for Brady'
 
 jobs:
   build:
-    name: Build TWRP by ${{ github.actor }}
+    name: Build by ${{ github.actor }}
     runs-on: ubuntu-20.04
     permissions:
       contents: write
 
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      WORK_DIR: /mnt/workspace
+      USE_CCACHE: 1
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
 
     steps:
-    - name: Checkout current repo
-      uses: actions/checkout@v4
+
+    - name: Show Disk & RAM
+      run: |
+        df -h
+        free -h
+
+    - name: Prepare Workspace
+      run: |
+        sudo mkdir -p $WORK_DIR && sudo chown $USER:$USER $WORK_DIR
 
     - name: Install Dependencies
       run: |
         sudo apt update
-        sudo apt install -y \
-          gperf gcc-multilib g++-multilib libncurses5-dev zlib1g-dev \
-          lib32z1-dev libssl-dev libxml2-utils bc ccache \
-          python-is-python2 python3 python3-pip unzip zip flex bison curl
+        sudo apt install -y bc bison build-essential ccache curl flex \
+          g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev \
+          lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev \
+          libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool \
+          squashfs-tools xsltproc zip zlib1g-dev python-is-python2 python3 python3-pip
 
     - name: Setup Java 8
       uses: actions/setup-java@v4
@@ -78,93 +89,64 @@ jobs:
         mkdir -p ~/bin
         curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
         chmod +x ~/bin/repo
-        echo 'export PATH=~/bin:$PATH' >> ~/.bashrc
-        source ~/.bashrc
-        sudo ln -sf ~/bin/repo /usr/bin/repo
+        echo "$HOME/bin" >> $GITHUB_PATH
 
-    - name: Initialize Repo
+    - name: Initialize TWRP Source
       run: |
-        mkdir -p android-recovery
-        cd android-recovery
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
+        cd $WORK_DIR
         repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b ${{ inputs.MANIFEST_BRANCH }}
 
     - name: Sync Source
       run: |
-        cd android-recovery
-        repo sync -c -j$(nproc --all) --force-sync --no-tags --no-clone-bundle
+        cd $WORK_DIR
+        repo sync -c -j$(nproc) --force-sync --no-tags --no-clone-bundle
 
     - name: Clone Device Tree
       run: |
-        cd android-recovery
-        echo "Cloning device tree from ${{ inputs.DEVICE_TREE }} [${{ inputs.DEVICE_TREE_BRANCH }}]"
+        cd $WORK_DIR
         git clone "${{ inputs.DEVICE_TREE }}" -b "${{ inputs.DEVICE_TREE_BRANCH }}" device/lenovo/brady
 
-    - name: Set Build Target Environment Variable
+    - name: Set Build Target
       run: |
         case "${{ inputs.BUILD_TARGET }}" in
           recovery) echo "BUILD_TARGET_NAME=recovery" >> $GITHUB_ENV ;;
           boot) echo "BUILD_TARGET_NAME=boot" >> $GITHUB_ENV ;;
           vendorboot) echo "BUILD_TARGET_NAME=vendor_boot" >> $GITHUB_ENV ;;
-          *) echo "Invalid build target"; exit 1 ;;
         esac
 
-    - name: Start TWRP Build
+    - name: Build TWRP with ccache
       run: |
-        cd android-recovery
-        source build/envsetup.sh
+        cd $WORK_DIR
         export ALLOW_MISSING_DEPENDENCIES=true
+        export CCACHE_EXEC=$(which ccache)
+        export PATH="$CCACHE_EXEC:$PATH"
+        ccache -M 2G
+        source build/envsetup.sh
         lunch omni_brady-eng
         make clean
-        make $BUILD_TARGET_NAME -j$(nproc)
+        make -j$(nproc) -O $BUILD_TARGET_NAME
 
-    - name: LDCheck (if enabled)
+    - name: Run LDCheck (optional)
       if: inputs.LDCHECK == true
       run: |
-        ROOT_DIR="android-recovery/out/target/product/brady/recovery/root"
+        ROOT_DIR="$WORK_DIR/out/target/product/brady/recovery/root"
         if [ -d "$ROOT_DIR" ]; then
-          echo "Running LDCheck on path: ${{ inputs.LDCHECKPATH }}"
           cd "$ROOT_DIR"
           python3 ldcheck -p system/lib64:vendor/lib64:system/lib:vendor/lib -d "${{ inputs.LDCHECKPATH }}"
         else
-          echo "Recovery root directory not found. Skipping LDCheck."
+          echo "LDCheck skipped — root directory not found."
         fi
       continue-on-error: true
 
-    - name: Upload Recovery Artifact
+    - name: Upload Recovery Image
       uses: actions/upload-artifact@v4
       with:
-        name: TWRP-${{ inputs.BUILD_TARGET }}-Lenovo-Brady
-        path: android-recovery/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img
-
-  release:
-    name: Upload to GitHub Release
-    needs: build
-    runs-on: ubuntu-20.04
-    permissions:
-      contents: write
-
-    steps:
-    - name: Download Recovery Artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: TWRP-${{ inputs.BUILD_TARGET }}-Lenovo-Brady
-        path: output
+        name: TWRP-${{ inputs.BUILD_TARGET }}-Brady
+        path: ${{ env.WORK_DIR }}/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ inputs.RELEASE_TAG }}
         name: ${{ inputs.RELEASE_NAME }}
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload Recovery Image
-      uses: softprops/action-gh-release@v2
-      with:
-        files: output/*.img
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        files: ${{ env.WORK_DIR }}/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img
