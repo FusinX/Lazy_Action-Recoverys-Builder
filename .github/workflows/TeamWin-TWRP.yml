@@ -1,4 +1,4 @@
-name: TeamWin [TWRP]
+name: Build TWRP Recovery
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
         default: 'twrp-8.1'
         type: choice
         options:
-        - twrp-8.1
+          - twrp-8.1
       DEVICE_TREE:
         description: 'Custom Recovery Tree'
         required: true
@@ -24,9 +24,9 @@ on:
         default: 'recovery'
         type: choice
         options:
-        - boot
-        - recovery
-        - vendorboot
+          - boot
+          - recovery
+          - vendorboot
       LDCHECK:
         description: 'Use LDCHECK'
         required: false
@@ -41,83 +41,90 @@ jobs:
   build:
     name: Build TWRP by ${{ github.actor }}
     runs-on: ubuntu-20.04
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: write
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
-    - name: Check Out
+
+    - name: Checkout current repo
       uses: actions/checkout@v4
-    
+
     - name: Install Dependencies
       run: |
         sudo apt update
-        sudo apt -y install gperf gcc-multilib g++-multilib libncurses5-dev zlib1g-dev \
+        sudo apt install -y \
+          gperf gcc-multilib g++-multilib libncurses5-dev zlib1g-dev \
           lib32z1-dev libssl-dev libxml2-utils bc ccache \
-          python2 python-is-python2 python3 python3-pip unzip zip flex bison curl 
-    
-    - name: Install OpenJDK 8
+          python-is-python2 python3 python3-pip unzip zip flex bison curl
+
+    - name: Setup Java 8
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '8'
-    
-    - name: Install Git-Repo
+
+    - name: Install Repo Tool
       run: |
-        mkdir ~/bin
-        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-        chmod a+x ~/bin/repo
+        mkdir -p ~/bin
+        curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod +x ~/bin/repo
+        echo 'export PATH=~/bin:$PATH' >> ~/.bashrc
+        source ~/.bashrc
         sudo ln -sf ~/bin/repo /usr/bin/repo
-    
+
     - name: Initialize Repo
       run: |
-        mkdir android-recovery
+        mkdir -p android-recovery
         cd android-recovery
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
-        repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b twrp-7.1
-    
-    - name: Sync Source Code
+        repo init --depth=1 -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git -b ${{ inputs.MANIFEST_BRANCH }}
+
+    - name: Sync Source
       run: |
         cd android-recovery
-        repo sync -j$(nproc --all) --force-sync
-    
+        repo sync -c -j$(nproc --all) --force-sync --no-tags --no-clone-bundle
+
     - name: Clone Device Tree
       run: |
         cd android-recovery
-        git clone ${{ inputs.DEVICE_TREE }} -b ${{ inputs.DEVICE_TREE_BRANCH }} ./device/lenovo/brady
-    
-    - name: Set Build Target
+        echo "Cloning device tree from ${{ inputs.DEVICE_TREE }} [${{ inputs.DEVICE_TREE_BRANCH }}]"
+        git clone "${{ inputs.DEVICE_TREE }}" -b "${{ inputs.DEVICE_TREE_BRANCH }}" device/lenovo/brady
+
+    - name: Set Build Target Environment Variable
       run: |
-        if [ ${{ inputs.BUILD_TARGET }} == 'recovery' ]; then
-           echo "BUILD_TARGET_NAME=recovery" >> $GITHUB_ENV
-        elif [ ${{ inputs.BUILD_TARGET }} == 'boot' ]; then
-           echo "BUILD_TARGET_NAME=boot" >> $GITHUB_ENV
-        else
-           echo "BUILD_TARGET_NAME=vendor_boot" >> $GITHUB_ENV
-        fi
-    
-    - name: Build TWRP Recovery
+        case "${{ inputs.BUILD_TARGET }}" in
+          recovery) echo "BUILD_TARGET_NAME=recovery" >> $GITHUB_ENV ;;
+          boot) echo "BUILD_TARGET_NAME=boot" >> $GITHUB_ENV ;;
+          vendorboot) echo "BUILD_TARGET_NAME=vendor_boot" >> $GITHUB_ENV ;;
+          *) echo "Invalid build target"; exit 1 ;;
+        esac
+
+    - name: Start TWRP Build
       run: |
         cd android-recovery
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         lunch twrp_brady-eng
         make clean
-        make ${{ env.BUILD_TARGET_NAME }} -j$(nproc --all)
-    
-    - name: Run LDCheck
-      if: inputs.LDCHECK == 'true'
+        make $BUILD_TARGET_NAME -j$(nproc)
+
+    - name: LDCheck (if enabled)
+      if: inputs.LDCHECK == true
       run: |
-        if [ -d "android-recovery/out/target/product/brady/recovery/root" ]; then
-            cd android-recovery/out/target/product/brady/recovery/root
-            python3 ldcheck -p system/lib64:vendor/lib64:system/lib:vendor/lib -d ${{ inputs.LDCHECKPATH }}
-            echo "LDCheck complete."
+        ROOT_DIR="android-recovery/out/target/product/brady/recovery/root"
+        if [ -d "$ROOT_DIR" ]; then
+          echo "Running LDCheck on path: ${{ inputs.LDCHECKPATH }}"
+          cd "$ROOT_DIR"
+          python3 ldcheck -p system/lib64:vendor/lib64:system/lib:vendor/lib -d "${{ inputs.LDCHECKPATH }}"
         else
-            echo "Recovery root directory not found, skipping LDCheck."
+          echo "Recovery root directory not found. Skipping LDCheck."
         fi
       continue-on-error: true
-    
+
     - name: Upload Recovery Image
       uses: actions/upload-artifact@v4
       with:
