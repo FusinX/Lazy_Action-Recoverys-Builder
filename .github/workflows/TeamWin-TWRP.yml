@@ -162,6 +162,25 @@ jobs:
       if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: TWRP-${{ inputs.BUILD_TARGET
-::contentReference[oaicite:10]{index=10}
- 
+        name: TWRP-${{ inputs.BUILD_TARGET }}
+        path: ${{ env.WORK_DIR }}/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img
+
+    - name: Create GitHub Release
+      if: success()
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ inputs.RELEASE_TAG }}
+        name: ${{ inputs.RELEASE_NAME }}
+        files: ${{ env.WORK_DIR }}/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img
+
+    - name: Final Disk Check
+      run: |
+        echo "Disk Usage at end:"
+        df -h
+        du -sh $WORK_DIR || true
+
+    - name: Cleanup
+      if: always()
+      run: |
+        sudo rm -rf $WORK_DIR/temp_ldcheck
+        sudo rm -rf $WORK_DIR/.repo
