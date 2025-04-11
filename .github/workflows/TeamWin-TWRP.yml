@@ -114,17 +114,37 @@ jobs:
           vendorboot) echo "BUILD_TARGET_NAME=vendor_boot" >> $GITHUB_ENV ;;
         esac
 
+    - name: Setup ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ runner.os }}-ccache
+        max-size: 2G
+
     - name: Build TWRP with ccache
       run: |
         cd $WORK_DIR
         export ALLOW_MISSING_DEPENDENCIES=true
         export CCACHE_EXEC=$(which ccache)
-        export PATH="$CCACHE_EXEC:$PATH"
+        export PATH="/usr/lib/ccache:$PATH"
         ccache -M 2G
         source build/envsetup.sh
         lunch omni_brady-eng
         make clean
-        make $BUILD_TARGET_NAME -j$(nproc)
+        make -j$(nproc) $BUILD_TARGET_NAME
+
+    - name: Check for output image
+      run: |
+        ls -lh $WORK_DIR/out/target/product/brady
+        if [ ! -f "$WORK_DIR/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img" ]; then
+          echo "::error::Build failed: Output image not found"
+          exit 1
+        fi
+
+    - name: Clone LDCheck tool
+      if: inputs.LDCHECK == true
+      run: |
+        git clone https://github.com/LineageOS/android_build.git temp_ldcheck
+        cp temp_ldcheck/tools/ldcheck.py $WORK_DIR/ldcheck.py
 
     - name: Run LDCheck (optional)
       if: inputs.LDCHECK == true
@@ -132,21 +152,16 @@ jobs:
         ROOT_DIR="$WORK_DIR/out/target/product/brady/recovery/root"
         if [ -d "$ROOT_DIR" ]; then
           cd "$ROOT_DIR"
-          python3 ldcheck -p system/lib64:vendor/lib64:system/lib:vendor/lib -d "${{ inputs.LDCHECKPATH }}"
+          python3 $WORK_DIR/ldcheck.py -p system/lib64:vendor/lib64:system/lib:vendor/lib -d "${{ inputs.LDCHECKPATH }}"
         else
           echo "LDCheck skipped — root directory not found."
         fi
       continue-on-error: true
 
     - name: Upload Recovery Image
+      if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: TWRP-${{ inputs.BUILD_TARGET }}-Brady
-        path: ${{ env.WORK_DIR }}/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ inputs.RELEASE_TAG }}
-        name: ${{ inputs.RELEASE_NAME }}
-        files: ${{ env.WORK_DIR }}/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img
+        name: TWRP-${{ inputs.BUILD_TARGET
+::contentReference[oaicite:10]{index=10}
+ 
