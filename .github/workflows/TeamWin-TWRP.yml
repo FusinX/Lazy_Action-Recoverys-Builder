@@ -124,7 +124,7 @@ jobs:
         source build/envsetup.sh
         lunch omni_brady-eng
         make clean
-        make -j$(nproc) -O $BUILD_TARGET_NAME
+        make $BUILD_TARGET_NAME -j$(nproc)
 
     - name: Run LDCheck (optional)
       if: inputs.LDCHECK == true
