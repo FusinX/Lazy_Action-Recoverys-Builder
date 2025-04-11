@@ -36,6 +36,14 @@ on:
         description: 'Path of blobs to check'
         required: true
         default: 'system/bin/qseecomd'
+      RELEASE_TAG:
+        description: 'Custom GitHub Release Tag'
+        required: true
+        default: 'twrp-brady-custom'
+      RELEASE_NAME:
+        description: 'Custom GitHub Release Name'
+        required: true
+        default: 'TWRP for Lenovo Brady'
 
 jobs:
   build:
@@ -48,7 +56,6 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-
     - name: Checkout current repo
       uses: actions/checkout@v4
 
@@ -125,8 +132,39 @@ jobs:
         fi
       continue-on-error: true
 
-    - name: Upload Recovery Image
+    - name: Upload Recovery Artifact
       uses: actions/upload-artifact@v4
       with:
         name: TWRP-${{ inputs.BUILD_TARGET }}-Lenovo-Brady
         path: android-recovery/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img
+
+  release:
+    name: Upload to GitHub Release
+    needs: build
+    runs-on: ubuntu-20.04
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download Recovery Artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: TWRP-${{ inputs.BUILD_TARGET }}-Lenovo-Brady
+        path: output
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ inputs.RELEASE_TAG }}
+        name: ${{ inputs.RELEASE_NAME }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload Recovery Image
+      uses: softprops/action-gh-release@v2
+      with:
+        files: output/*.img
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
