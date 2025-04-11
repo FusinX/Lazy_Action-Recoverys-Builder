@@ -56,7 +56,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       WORK_DIR: /mnt/workspace
       USE_CCACHE: 1
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_DIR: /mnt/workspace/.ccache
 
     steps:
 
@@ -67,12 +67,13 @@ jobs:
 
     - name: Prepare Workspace
       run: |
-        sudo mkdir -p $WORK_DIR && sudo chown $USER:$USER $WORK_DIR
+        sudo mkdir -p $WORK_DIR
+        sudo chown $USER:$USER $WORK_DIR
 
     - name: Install Dependencies
       run: |
-        sudo apt update
-        sudo apt install -y bc bison build-essential ccache curl flex \
+        sudo apt-get update
+        sudo apt-get install -y bc bison build-essential ccache curl flex \
           g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev \
           lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev \
           libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool \
@@ -117,7 +118,7 @@ jobs:
     - name: Setup ccache
       uses: hendrikmuhs/ccache-action@v1.2
       with:
-        key: ${{ runner.os }}-ccache
+        key: ${{ runner.os }}-twrp-ccache
         max-size: 2G
 
     - name: Build TWRP with ccache
@@ -132,19 +133,19 @@ jobs:
         make clean
         make -j$(nproc) $BUILD_TARGET_NAME
 
-    - name: Check for output image
+    - name: Check for Output Image
       run: |
         ls -lh $WORK_DIR/out/target/product/brady
         if [ ! -f "$WORK_DIR/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img" ]; then
-          echo "::error::Build failed: Output image not found"
+          echo "::error::Build failed: Output image not found."
           exit 1
         fi
 
     - name: Clone LDCheck tool
       if: inputs.LDCHECK == true
       run: |
-        git clone https://github.com/LineageOS/android_build.git temp_ldcheck
-        cp temp_ldcheck/tools/ldcheck.py $WORK_DIR/ldcheck.py
+        git clone https://github.com/LineageOS/android_build.git $WORK_DIR/temp_ldcheck
+        cp $WORK_DIR/temp_ldcheck/tools/ldcheck.py $WORK_DIR/ldcheck.py
 
     - name: Run LDCheck (optional)
       if: inputs.LDCHECK == true
@@ -154,7 +155,7 @@ jobs:
           cd "$ROOT_DIR"
           python3 $WORK_DIR/ldcheck.py -p system/lib64:vendor/lib64:system/lib:vendor/lib -d "${{ inputs.LDCHECKPATH }}"
         else
-          echo "LDCheck skipped — root directory not found."
+          echo "LDCheck skipped: root directory not found."
         fi
       continue-on-error: true
 
@@ -184,3 +185,4 @@ jobs:
       run: |
         sudo rm -rf $WORK_DIR/temp_ldcheck
         sudo rm -rf $WORK_DIR/.repo
+        sudo rm -rf $WORK_DIR/.ccache
