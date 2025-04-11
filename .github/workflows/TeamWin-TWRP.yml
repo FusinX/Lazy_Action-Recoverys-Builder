@@ -100,7 +100,7 @@ jobs:
     - name: Sync Source
       run: |
         cd $WORK_DIR
-        repo sync -c -j$(nproc) --force-sync --no-tags --no-clone-bundle
+        repo sync -c -j2 --force-sync --no-tags --no-clone-bundle
 
     - name: Clone Device Tree
       run: |
@@ -121,7 +121,7 @@ jobs:
         key: ${{ runner.os }}-twrp-ccache
         max-size: 2G
 
-    - name: Build TWRP with ccache
+    - name: Build TWRP with Optimized Threads
       run: |
         cd $WORK_DIR
         export ALLOW_MISSING_DEPENDENCIES=true
@@ -131,7 +131,8 @@ jobs:
         source build/envsetup.sh
         lunch omni_brady-eng
         make clean
-        make -j$(nproc) $BUILD_TARGET_NAME
+        # Use limited number of threads to avoid I/O saturation
+        make -j2 $BUILD_TARGET_NAME
 
     - name: Check for Output Image
       run: |
@@ -186,3 +187,4 @@ jobs:
         sudo rm -rf $WORK_DIR/temp_ldcheck
         sudo rm -rf $WORK_DIR/.repo
         sudo rm -rf $WORK_DIR/.ccache
+        sudo rm -rf $WORK_DIR/out
