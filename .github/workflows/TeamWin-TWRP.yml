@@ -59,7 +59,6 @@ jobs:
       CCACHE_DIR: /mnt/workspace/.ccache
 
     steps:
-
     - name: Show Disk & RAM
       run: |
         df -h
@@ -129,16 +128,31 @@ jobs:
         export PATH="/usr/lib/ccache:$PATH"
         ccache -M 2G
         source build/envsetup.sh
-        lunch omni_brady-eng
+
+        echo "Available lunch combos:"
+        lunch || true
+
+        # Try to detect the correct lunch combo dynamically
+        COMBO=$(grep -r "add_lunch_combo" device/lenovo/brady 2>/dev/null | grep -o 'omni_[^"]*' | head -n 1)
+        if [ -z "$COMBO" ]; then
+          COMBO="omni_brady-eng"
+        fi
+
+        echo "Using lunch combo: $COMBO"
+        lunch $COMBO
+
         make clean
-        # Use limited number of threads to avoid I/O saturation
-        make -j2 $BUILD_TARGET_NAME
+        make -j2 $BUILD_TARGET_NAME showcommands
 
     - name: Check for Output Image
       run: |
+        echo "Checking output in $WORK_DIR/out/target/product/brady"
         ls -lh $WORK_DIR/out/target/product/brady
-        if [ ! -f "$WORK_DIR/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img" ]; then
-          echo "::error::Build failed: Output image not found."
+        OUT_IMAGE="$WORK_DIR/out/target/product/brady/${{ env.BUILD_TARGET_NAME }}.img"
+        if [ ! -f "$OUT_IMAGE" ]; then
+          echo "::error::Build failed: Output image not found at $OUT_IMAGE"
+          echo "Searching for any .img files..."
+          find $WORK_DIR/out/target/product/brady -name "*.img"
           exit 1
         fi
 
